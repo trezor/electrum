@@ -30,7 +30,7 @@ try:
     from trezorlib.messages import (
         Capability, BackupType, RecoveryDeviceType, HDNodeType, HDNodePathType,
         InputScriptType, OutputScriptType, MultisigRedeemScriptType,
-        TxInputType, TxOutputType, TxOutputBinType, TransactionType, SignTx)
+        TxInputType, TxOutputType, TxOutputBinType, TransactionType, AmountUnit)
 
     from trezorlib.client import PASSPHRASE_ON_DEVICE
 
@@ -132,6 +132,13 @@ class TrezorPlugin(HW_PluginBase):
             return
         self.device_manager().register_enumerate_func(self.enumerate)
         self._is_bridge_available = None
+        _point_to_unit = {
+            0: AmountUnit.SATOSHI,
+            2: AmountUnit.MICROBITCOIN,
+            5: AmountUnit.MILLIBITCOIN,
+            8: AmountUnit.BITCOIN,
+        }
+        self.amount_unit = _point_to_unit.get(config.decimal_point)
 
     def get_library_version(self):
         import trezorlib
@@ -349,11 +356,15 @@ class TrezorPlugin(HW_PluginBase):
         client = self.get_client(keystore)
         inputs = self.tx_inputs(tx, for_sig=True, keystore=keystore)
         outputs = self.tx_outputs(tx, keystore=keystore)
-        signatures, _ = client.sign_tx(self.get_coin_name(),
-                                       inputs, outputs,
-                                       lock_time=tx.locktime,
-                                       version=tx.version,
-                                       prev_txes=prev_tx)
+        signatures, _ = client.sign_tx(
+            coin_name=self.get_coin_name(),
+            inputs=inputs,
+            outputs=outputs,
+            prev_txes=prev_tx
+            lock_time=tx.locktime,
+            version=tx.version,
+            amount_unit=self.amount_unit,
+        )
         signatures = [(bh2u(x) + '01') for x in signatures]
         tx.update_signatures(signatures)
 
